@@ -1,68 +1,42 @@
-# from fastapi import FastAPI, Request
-# from fastapi.responses import JSONResponse 
-#
-# app = FastAPI()
-#
-# usersession = {
-#     "name": "linuxdex",
-#     "linux": "Arch Linux"
-# }
-#
-# @app.middleware("http")
-# async def add_custom_headers(request: Request, call_next):
-#
-#     request.headers.__dict__["_list"].append(
-#         (b"new-header", b"new-value")
-#     )
-#
-#     # request.state.custom_field = "customeValue"
-#     request.state.custom_field = usersession
-#
-#     response = await call_next(request)
-#     return response
-#
-# @app.get("/")
-# async def read_root(request: Request):
-#     return JSONResponse( content={
-#         "message": "Request received",
-#         "modified_headers": dict(request.headers),
-#         "custom_field": request.state.custom_field
-#     })
-
-
-# NOTE: this is different method 
-
-from fastapi import FastAPI, Response, Request, HTTPException
-from starlette.middleware.base import BaseHTTPMiddleware 
+from fastapi import FastAPI, Response, Request, Depends, Cookie
+# from starlette.middleware.base import BaseHTTPMiddleware 
 # from starlette.requests import Request 
 # from starlette.responses import Response 
-from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from typing import Optional, Any, Dict
 
 app = FastAPI()
 
-class AddHeaderMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
+# class AddHeaderMiddleware(BaseHTTPMiddleware):
+#     async def dispatch(self, request: Request, call_next):
+#
+#         # val = request.cookies.get("Name")
+#         # print(f"cookie value {val}")
+#         # if not val:
+#         #     raise HTTPException(status_code=400, detail="Cookie is missing")
+#         # response.headers["name"] = "linuxdex"
+#
+#         headers = dict(request.headers)
+#
+#         headers["X-Custom-Header"] = "CustomValue"
+#
+#         modified_request = Request(
+#             scope=request.scope,
+#             receive=request.receive,
+#             headers=headers
+#         )
+#
+#         response = await call_next(modified_request)
+#
+#         # response = await call_next(request)
+#         return response 
+#
+# app.add_middleware(AddHeaderMiddleware)
 
-        try:
-            val = request.cookies.get("Name")
-            print(f"cookie value {val}")
-        except:
-            pass
-        # if not val:
-        #     raise HTTPException(status_code=400, detail="Cookie is missing")
-        # response.headers["name"] = "linuxdex"
-
-        # test 
-        body = request.query_params
-        body = dict(body)
-        body["usersession"] = val
-        print(f"middleware body -> {body}")
-
-
-        return response 
-
-app.add_middleware(AddHeaderMiddleware)
+class FilterSortModel(BaseModel):
+    filter: Optional[Dict] = Field(None, description="Filter criteria")
+    sort: Optional[str] = Field(None, description="Sort order")
+    cookie_value: Optional[Dict] = Field(None, description="Cookie value")
 
 @app.get("/")
 async def read_root():
@@ -86,20 +60,56 @@ async def remove_cookie(response: Response):
 @app.get("/get-cookie")
 async def remove_cookie(request: Request):
     cookie_value = request.cookies.get("Name", "Cookie not found")
+    cookie_value = eval(cookie_value)
     return { "Cookie value": cookie_value }
 
+async def process_request(request: Request):
+    cookie_value = request.cookies.get("Name", "cookie not found")
+    cookie_value = eval(cookie_value)
+    return cookie_value
+
 @app.get("/list")
-async def list_value( request: Request ):
+async def list_value( request: Request , cookie_value: str = Depends(process_request)):
     body = request.query_params
 
-    result = dict(body)
-    try:
-        print(f"usersession in api -> {result["usersession"]}")
-    except:
-        pass
     return {
-        "message": body
+        "message": body,
+        "cookie": cookie_value
     }
 
+async def get_filter_sort_data(request: Request, cookie_value: str = Depends(process_request) ) -> FilterSortModel:
+    query_params = request.query_params
+    filter_param = eval(query_params.get('filter', None))
+    sort_param = query_params.get('sort', None)
 
+    return FilterSortModel(
+        filter=filter_param,
+        sort=sort_param,
+        cookie_value=cookie_value
+    )
 
+# async def get_filter_sort_data(request: Request ) -> FilterSortModel:
+#
+#     cookie_value = request.cookies.get("Name")
+#     query_params = request.query_params
+#     filter_param = query_params.get('filter', None)
+#     sort_param = query_params.get('sort', None)
+#
+#     return FilterSortModel(
+#         filter=filter_param,
+#         sort=sort_param,
+#         cookie_value=cookie_value
+#     )
+
+@app.get("/items/")
+async def read_items(data: FilterSortModel = Depends(get_filter_sort_data)):
+    filter_value = data.filter
+    sort_value = data.sort
+    cookie_value = data.cookie_value
+    
+    # return {
+    #     "filter": filter_value,
+    #     "sort": sort_value,
+    #     "cookie_value": cookie_value
+    # }
+    return data
