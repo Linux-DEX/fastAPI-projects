@@ -14,15 +14,28 @@ def read_root():
     return Response("Hello world")
 
 
+# @app.get("/posts/{id}")
+# def read_post(id: str):
+#     cache = rd.get(id)
+#     if cache:
+#         print("cache hit")
+#         return json.loads(cache)
+#     else:
+#         print("cache miss")
+#         r = requests.get(f"https://jsonplaceholder.typicode.com/posts/{id}")
+#         rd.set(id, r.text)
+#         rd.expire(id, 5)
+#         return r.json()
+
+
 @app.get("/posts/{id}")
 def read_post(id: str):
-    cache = rd.get(id)
+    cache = rd.get(f"{id}:user")
     if cache:
         print("cache hit")
         return json.loads(cache)
     else:
         print("cache miss")
         r = requests.get(f"https://jsonplaceholder.typicode.com/posts/{id}")
-        rd.set(id, r.text)
-        rd.expire(id, 5)
+        rd.set(f"{id}:user", r.text)
         return r.json()
